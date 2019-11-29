@@ -4,6 +4,7 @@ import java.nio.file.Paths;
 import java.util.StringTokenizer;
 
 public class Peer {
+	final static int MAX_DOWNLOAD_THREAD = 3;
 	final static int MAX_PEER_SIZE = 5;
 	static int chunkSize;
 	static int chunkNum;
@@ -13,6 +14,8 @@ public class Peer {
 	
 	static String config_dir = "config";
 	static String config_filename;
+	
+	// configfile 읽은정보 저
 	static String[] domain_arr;
 	static int[] port_arr;
 	
@@ -21,6 +24,7 @@ public class Peer {
 	static byte[][] data;
 	static byte[] chunkMap;
 	
+	static int[] time = new int[MAX_DOWNLOAD_THREAD];
 	
 	static void readConfigFile(String fn) throws Exception {
 		Path p = Paths.get(System.getProperty("user.dir"), config_dir);
@@ -49,6 +53,7 @@ public class Peer {
 		Path p = Paths.get(System.getProperty("user.dir"), torrent_dir);
 		torrent_filename = fn;
 		File torrent_file = new File(p.toString(), torrent_filename);
+		//chunkSize, chunkNum, data, chunkMap, seeders[0]가 있
 		if (torrent_file.exists()) {
 			chunkSize = 1024*10;
 			chunkNum = (int) Math.ceil((double) torrent_file.length() / chunkSize); // Calculate chunk number
@@ -78,6 +83,7 @@ public class Peer {
 			fis.close();
 			bis.close();
 		}
+		//chunkSize, chunkNum, data, chunkMap, seeders[0]가 없음.
 		else {
 			System.out.println("There is no such file in files folder");
 			System.out.println("File Download Start");
@@ -118,9 +124,14 @@ public class Peer {
 
 		seeders = new int[MAX_PEER_SIZE];
 		
+		//config, torrent file 읽기.
 		readConfigFile(args[0]);
 		readTorrentFile(args[1]);
 		
+		//만약 내가 파일이 있는 시더다-> //chunkSize, chunkNum, data, chunkMap, seeders[0]가 세팅되어 있다.
+		//만약 내가 파일이 없는 클라다-> //chunkSize, chunkNum, data, chunkMap, seeders[0]가 세팅되어 있지 않음.
+		
+		//서버스레드, 클라이언트 스레드 구동.
 		int listenPort = port_arr[0];
 		ServerThread s_thread = new ServerThread(listenPort);
 		ClientThread c_thread = new ClientThread();
@@ -129,18 +140,7 @@ public class Peer {
 		server_Thread.start();
 		client_Thread.start();
 		
-		while(!check_chunkFull(chunkMap)) {
-			System.out.println("Peer : 파일 만들기 기다리는중");
-			Thread.sleep(10000);
-		}
-		System.out.println("청크 가득 참. 파일 만들기.");
-		FileOutputStream fos = new FileOutputStream(torrent_dir +"/"+ torrent_filename);
-		BufferedOutputStream bos = new BufferedOutputStream(fos);
-		for (int i = 0; i < chunkNum; i++) {
-			bos.write(data[i], 0, data[i].length);
-		}
-		fos.close();
-		bos.close();
+
 		System.out.println("================================================");
 		System.out.println("                   Peer End                    ");
 		System.out.println("================================================");

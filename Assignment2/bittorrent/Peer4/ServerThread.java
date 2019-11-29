@@ -23,14 +23,18 @@ public class ServerThread implements Runnable {
 		System.out.println("               Server Thread Start              ");
 		System.out.println("================================================");
 		// 모두가 seeder가되면 끝남.
-		while(!Peer.allPeerCompleted) {
 		welcomeSocket = new ServerSocket(listenPort);
+		// 서버소켓 연결 종료시간 30
+		welcomeSocket.setSoTimeout(30000);
+		while(!Peer.allPeerCompleted) {
 		connectionSocket = welcomeSocket.accept();
 		UploadThread uploadThread = new UploadThread(connectionSocket);
 		Thread thread = new Thread(uploadThread);
 		thread.start();
-		welcomeSocket.close();
+
 		}
+		welcomeSocket.close();
+		connectionSocket.close();
 		Thread.sleep(1000);
 		System.out.println("================================================");
 		System.out.println("     All peers in server download completed     ");

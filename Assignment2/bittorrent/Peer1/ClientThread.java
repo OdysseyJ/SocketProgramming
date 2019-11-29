@@ -18,46 +18,35 @@ public class ClientThread implements Runnable {
 	byte[] peerChunkMap;
 	
 	// Send request to server (command channel)
-	void sendRequest() {
+	void sendRequest(String command) {
 		try {
-			byte[] sendBuff = new byte[command.length()];
-			sendBuff = command.getBytes();
-			sendStream.write(sendBuff, 0, sendBuff.length);
+			dos.writeUTF(command);
+			dos.flush();
 		} catch (IOException ex) {
 			System.err.println("IOException in sendRequest");
 		}
 	}
-		
-	// Receive response from server (command channel)
-	void getResponse() {
+		// Receive response from server (command channel)
+	String getResponse() {
 		try {
-			int dataSize;
-			while ((dataSize = recvStream.available()) == 0);
-			byte[] recvBuff = new byte[dataSize];
-			recvStream.read(recvBuff, 0, dataSize);
-			response = new String(recvBuff, 0, dataSize);
+			return dis.readUTF();
 		} catch (IOException ex) {
 			System.err.println("IOException in getResponse");
 		}
+		return "";
 	}
 	
 	void recv_information() throws IOException {
 		this.peerFileName = dis.readUTF();
-		System.out.println("Client - peerfilename" + this.peerFileName);
-		if(this.peerFileName.equals("null")) {
-		}
-		else {
-		this.peerChunkSize = dis.readInt();
-
-		System.out.println("Client - peerfilename" + this.peerChunkSize);
-		this.peerChunkNum = dis.readInt();
-
-		System.out.println("Client - peerfilename" + this.peerChunkNum);
-		peerChunkMap = new byte[this.peerChunkNum];
-		dis.read(peerChunkMap, 0, peerChunkMap.length);
-		if (Peer.chunkMap == null) {
-		Peer.set_information(this.peerChunkSize, this.peerChunkNum);
-		}
+		System.out.println("Client - peerfilename " + this.peerFileName);
+		if(!this.peerFileName.equals("null")) {
+			this.peerChunkSize = dis.readInt();
+			this.peerChunkNum = dis.readInt();
+			peerChunkMap = new byte[this.peerChunkNum];
+			dis.read(peerChunkMap, 0, peerChunkMap.length);
+			if (Peer.chunkMap == null) {
+			Peer.set_information(this.peerChunkSize, this.peerChunkNum);
+			}
 		}
 	}
 		
@@ -140,11 +129,9 @@ public class ClientThread implements Runnable {
 				System.out.println("      Client Thread 서버연결 완료 - 청크다운로드      ");
 				System.out.println("================================================");
 				System.out.println(Peer.domain_arr[index]+":"+Peer.port_arr[index]+ " 와 연결되었음");
-				command = "Request_ChunkMap";
-				sendRequest();
+				sendRequest("Request_ChunkMap");
 				System.out.println("Client - 청크맵 요청 보내기");
 				recv_information();
-				Thread.sleep(1000);
 				if(!peerFileName.equals("null")) {
 					System.out.println("Client - 청크를 가지고 있는 서버와 연결");
 					int[] missing_list = find_missing_index(peerChunkMap);
@@ -157,8 +144,7 @@ public class ClientThread implements Runnable {
 					}
 					System.out.println("Client - 모자란 청크 개수(total) " + total);
 					
-					command = "Request_Chunks";
-					sendRequest();
+					sendRequest("Request_Chunks");
 					dos.writeInt(total);
 					dos.flush();
 					
@@ -178,23 +164,28 @@ public class ClientThread implements Runnable {
 							}
 						}
 					}
-					
-					for (int i = 0; i < randomChunk.length; i++) {
-						System.out.println("보내는 랜덤 청크" + randomChunk[i]);
-						dos.writeInt(randomChunk[i]);
-						dos.flush();
-					}
-					
-					System.out.println("Client - 쓰기완료");
-					
-					for (int i = 0; i < randomChunk.length; i++) {
-						System.out.println("Client - "+i+"번째 미싱청크 받기");
-						Peer.chunkMap[randomChunk[i]] = (byte)1;
-						recvStream.read(Peer.data[randomChunk[i]]);
-					}
 
-					Thread.sleep(2000);
-					System.out.println("Client - 최대 3개의 청크 요청 읽기 완료");
+					response = getResponse();
+					if (response.equalsIgnoreCase("total")){
+						for (int i = 0; i < randomChunk.length; i++) {
+							System.out.println("보내는 랜덤 청크" + randomChunk[i]);
+							dos.writeInt(randomChunk[i]);
+						}
+						dos.flush();
+						
+						response= getResponse();
+						if (response.equalsIgnoreCase("received")) {
+							System.out.println("Client - 쓰기완료");
+							
+							for (int i = 0; i < randomChunk.length; i++) {
+								System.out.println("Client - "+i+"번째 미싱청크 받기");
+								Peer.chunkMap[randomChunk[i]] = (byte)1;
+								recvStream.read(Peer.data[randomChunk[i]]);
+							}
+							System.out.println("Client - 최대 3개의 청크 요청 읽기 완료");
+						}
+						sendRequest("Completed");
+					}
 				}
 				else {
 					System.out.println("Client - 연결한 서버가 청크 없음");
@@ -213,6 +204,14 @@ public class ClientThread implements Runnable {
 		}
 		Peer.seeders[0] = 1;
 		System.out.println("Client Thread - 파일 다운로드 종료");
+		System.out.println("Client Thread -  파일 만들기.");
+		FileOutputStream fos = new FileOutputStream(Peer.torrent_dir +"/"+ Peer.torrent_filename);
+		BufferedOutputStream bos = new BufferedOutputStream(fos);
+		for (int i = 0; i < Peer.chunkNum; i++) {
+			bos.write(Peer.data[i], 0, Peer.data[i].length);
+		}
+		fos.close();
+		bos.close();
 		index = 1;
 		while (!allPeerIsSeeder()) {
 			if (connectSocket(index)) {
@@ -223,8 +222,7 @@ public class ClientThread implements Runnable {
 				System.out.println("================================================");
 				System.out.println("       Client Thread 서버연결 완료 - 시더판별         ");
 				System.out.println("================================================");
-				command = "Request_Seeder";
-				sendRequest();
+				sendRequest("Request_Seeder");
 				Thread.sleep(1000);
 				Peer.seeders[index] = dis.readInt();
 				

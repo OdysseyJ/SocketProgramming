@@ -22,27 +22,23 @@ public class UploadThread implements Runnable {
 	}
 	
 	// Send request to server (command channel)
-	void sendRequest() {
+	void sendRequest(String command) {
 		try {
-			byte[] sendBuff = new byte[command.length()];
-			sendBuff = command.getBytes();
-			sendStream.write(sendBuff, 0, sendBuff.length);
+			dos.writeUTF(command);
+			dos.flush();
 		} catch (IOException ex) {
 			System.err.println("IOException in sendRequest");
 		}
 	}
 			
 			// Receive response from server (command channel)
-	void getResponse() {
+	String getResponse() {
 		try {
-			int dataSize;
-			while ((dataSize = recvStream.available()) == 0);
-			byte[] recvBuff = new byte[dataSize];
-			recvStream.read(recvBuff, 0, dataSize);
-			response = new String(recvBuff, 0, dataSize);
+			return dis.readUTF();
 		} catch (IOException ex) {
 			System.err.println("IOException in getResponse");
 		}
+		return "";
 	}
 	
 	void send_information() throws IOException {
@@ -54,11 +50,8 @@ public class UploadThread implements Runnable {
 		}
 		else {
 		dos.writeUTF(Peer.torrent_filename);
-		dos.flush();
 		dos.writeInt(Peer.chunkSize);
-		dos.flush();
 		dos.writeInt(Peer.chunkNum);
-		dos.flush();
 		dos.write(Peer.chunkMap, 0, Peer.chunkMap.length);
 		dos.flush();
 		}
@@ -76,16 +69,21 @@ public class UploadThread implements Runnable {
 		System.out.println("================================================");
 		System.out.println("               UploadThread Start               ");
 		System.out.println("================================================");
-		getResponse();
+		// Request_ChunkMap or Request_Seeder를 받음.
+		response = getResponse();
 		System.out.println("UploadThread 받은요청 : " + response);
 		if (response.equalsIgnoreCase("Request_ChunkMap")) {
 			System.out.println("UploadThread - ChunkMap 요청을 받음.");
+			// 데이터 전송
 			send_information();
-			getResponse();
+			response = getResponse();
+			System.out.println(response + " " + response.length());
 			if (response.equalsIgnoreCase("Request_Chunks")) {
 				System.out.println("UploadThread - Chunks 요청을 받음");
 				int total = dis.readInt();
 				System.out.println("UploadThread - 전달받은 total " + total);
+				sendRequest("total");
+				
 				int[] list;
 				if (total>3) {
 					list = new int[3];
@@ -95,13 +93,15 @@ public class UploadThread implements Runnable {
 				}
 				for (int i = 0; i < list.length ; i++) {
 					list[i] = dis.readInt();
-
-					System.out.println("UploadThread - 요청 청크 " + list[i]);
+					System.out.println("UploadThread - 요청받은 청크번호 " + list[i]);
 				}
+				sendRequest("received");
 				for (int i = 0; i < list.length; i++) {
 					sendStream.write(Peer.data[list[i]]);
 					System.out.println("UploadThread - 해당 청크를 전송완료." + list[i]);
-				}	
+				}
+				response = getResponse();
+				System.out.println(response+ " 마지막 response!#!@#!@#!@");
 			}
 		}
 		else if (response.equalsIgnoreCase("Request_Seeder")) {
