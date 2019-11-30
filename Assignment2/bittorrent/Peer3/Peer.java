@@ -4,27 +4,46 @@ import java.nio.file.Paths;
 import java.util.StringTokenizer;
 
 public class Peer {
-	final static int MAX_DOWNLOAD_THREAD = 3;
+	final static int MAX_FRIENDS_SIZE = 3;
 	final static int MAX_PEER_SIZE = 5;
+	final static String config_dir = "config";
+	final static String torrent_dir = "files";
+	
 	static int chunkSize;
 	static int chunkNum;
 	
 	static int[] seeders;
-	static boolean allPeerCompleted = false;
+	static boolean allPeerCompleted;
 	
-	static String config_dir = "config";
 	static String config_filename;
-	
-	// configfile 읽은정보 저
+	static String torrent_filename;
 	static String[] domain_arr;
 	static int[] port_arr;
 	
-	static String torrent_dir = "files";
-	static String torrent_filename;
 	static byte[][] data;
 	static byte[] chunkMap;
 	
-	static int[] time = new int[MAX_DOWNLOAD_THREAD];
+	static int[] friendsArr;
+	static int friendsIndex;
+	static byte[][] friendsChunkMap;
+	static String[] friendsFileName;
+	static int[] friendsChunkSize;
+	static int[] friendsChunkNum;
+	
+	static void init() {
+		allPeerCompleted = false;
+		seeders = new int[MAX_PEER_SIZE];
+		friendsArr = new int[MAX_FRIENDS_SIZE];
+		friendsIndex = 0;
+		friendsChunkMap = new byte[MAX_PEER_SIZE+1][];
+		friendsFileName = new String[MAX_PEER_SIZE+1];
+		friendsChunkSize = new int[MAX_PEER_SIZE+1];
+		friendsChunkNum = new int[MAX_PEER_SIZE+1];
+		
+		for (int i = 0; i < friendsArr.length; i++) {
+			friendsArr[i] = -1;
+		}
+	}
 	
 	static void readConfigFile(String fn) throws Exception {
 		Path p = Paths.get(System.getProperty("user.dir"), config_dir);
@@ -122,7 +141,8 @@ public class Peer {
 		System.out.println("                  Peer Start                    ");
 		System.out.println("================================================");
 
-		seeders = new int[MAX_PEER_SIZE];
+		//초기
+		init();
 		
 		//config, torrent file 읽기.
 		readConfigFile(args[0]);
@@ -134,11 +154,17 @@ public class Peer {
 		//서버스레드, 클라이언트 스레드 구동.
 		int listenPort = port_arr[0];
 		ServerThread s_thread = new ServerThread(listenPort);
-		ClientThread c_thread = new ClientThread();
+		ClientThread c_thread = new ClientThread(1);
+		ClientThread c_thread2 = new ClientThread(2);
+		ClientThread c_thread3 = new ClientThread(3);
 		Thread server_Thread = new Thread(s_thread);
 		Thread client_Thread = new Thread(c_thread);
+		Thread client_Thread2 = new Thread(c_thread2);
+		Thread client_Thread3 = new Thread(c_thread3);
 		server_Thread.start();
 		client_Thread.start();
+		client_Thread2.start();
+		client_Thread3.start();
 		
 
 		System.out.println("================================================");
